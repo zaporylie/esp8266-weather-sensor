@@ -42,11 +42,3 @@ bool readData(float data[], bool cache = true) {
   return true;
 }
 
-bool readForcast() {
-  if (isnan(lat) || isnan(lon)) {
-//    if (!getlocation()) {
-      return false;
-//    }
-  }
-}
-

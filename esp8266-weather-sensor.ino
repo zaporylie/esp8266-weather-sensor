@@ -25,7 +25,6 @@ DHT dht(DHTPIN, DHTTYPE);
 // Server init.
 #include "server.h"
 
-
 // Display libraries.
 #include <Wire.h>
 #include "ssd1306_i2c.h"
@@ -53,7 +52,7 @@ void setup() {
 
   // Handle data.
   server.on("/", handleData);
-  server.on("/test", getLocation);
+//  server.on("/test", readForecast);
 
   // Add updater.
   httpUpdater.setup(&server);
@@ -75,7 +74,7 @@ void setup() {
   // how many ticks does a slide of a frame take?
   display.setFrameTransitionTicks(10);
   // defines how many ticks the driver waits between frame transitions
-  display.setFrameWaitTicks(500);
+  display.setFrameWaitTicks(100);
 
   display.clear();
   display.display();

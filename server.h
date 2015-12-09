@@ -40,12 +40,32 @@ void handleData() {
   // Print.
   String temp;
   root.printTo(temp);
-  server.send(code, "application/javascript", temp);
+  server.send(code, "application/json", temp);
+}
+
+bool parseClientResponse(WiFiClient &client, String &result) {
+  
+  // Skip irrelevant lines;
+  while(client.available() && (result != "\n")) {
+    result = client.readStringUntil('\r');
+    Serial.print(result);
+  }
+
+  while (client.available()) {
+    // Parse JSON
+    result = client.readStringUntil('\r');
+    if (result.length() > 5) {
+      result = result.substring(1);
+      return true;
+    }
+  }
+
+  return false;
 }
 
 bool getLocation() {
   
-  String response;
+  String result;
   
   // Use WiFiClient class to create TCP connections
   WiFiClient client;
@@ -68,15 +88,113 @@ bool getLocation() {
                "Connection: close\r\n\r\n");
   delay(10);
   
-  // Read all the lines of the reply from server and print them to Serial
-  while(client.available()){
-    response += client.readStringUntil('\r');
+  if (!parseClientResponse(client, result)) {
+    Serial.println("unable to parse response");
+    return false;
+  }
+  
+  int size = result.length() + 1;
+  char json[size];
+  result.toCharArray(json, size);
+  StaticJsonBuffer<500> jsonBuffer;
+  JsonObject& root = jsonBuffer.parseObject(json);
+  
+  if (!root.success()) {
+    Serial.println("unable to parse json");
+    return false;
+  }
+  
+  lat = root["lat"];
+  Serial.println(lat);
+  lon = root["lon"];
+  Serial.println(lon);
+  city = root["city"];
+  Serial.println(city);
+
+  return true;
+}
+
+float temperatureRemoteBuffer;
+float humidityRemoteBuffer;
+float pressureRemoteBuffer;
+unsigned long readForecastCounter;
+bool readForecast(bool cache = true) {
+
+  if (lat == 0 || lon == 0) {
+    if (!getLocation()) {
+      return false;
+    }
   }
 
-  StaticJsonBuffer<500> jsonBuffer;
-  JsonObject& root = jsonBuffer.parseObject(response);
-  lat = root["lat"];
-  lon = root["lon"];
-  city = root["city"];
-  server.send(200, "text/plain", response);
+  if (isnan(temperatureBuffer) || isnan(humidityBuffer) || isnan(heatIndexBuffer)) {
+    cache = false;
+  }
+  
+  int tmp = millis() / 1000;
+  if (((tmp - readForecastCounter) < frequencyRemote) && cache) {
+    return true;
+  }
+
+  String result;
+  // Use WiFiClient class to create TCP connections
+  WiFiClient client;
+  const int httpPort = 80;
+  const char* host = "api.openweathermap.org";
+  if (!client.connect(host, httpPort)) {
+    Serial.println("connection failed");
+    server.send(200, "application/json", "connection failed");
+    return false;
+  }
+  
+  // We now create a URI for the request
+  String url = "/data/2.5/weather";
+  url += "?";
+  url += "units=metric";
+  url += "&";
+  url += "lat=";
+  url += lat;
+  url += "&";
+  url += "lon=";
+  url += lon;
+  url += "&";
+  url += "appid=";
+  url += APPID;
+  
+  Serial.print("Requesting URL: ");
+  Serial.println(url);
+  
+  // This will send the request to the server
+  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+               "Host: " + host + "\r\n" + 
+               "Connection: close\r\n\r\n");
+  delay(500);
+  
+  if (!parseClientResponse(client, result)) {
+    Serial.println(result);
+    server.send(200, "application/json", result);
+    return false;
+  }
+
+  int size = result.length() + 1;
+  char json[size];
+  result.toCharArray(json, size);
+  StaticJsonBuffer<2000> jsonBuffer;
+  JsonObject& root = jsonBuffer.parseObject(json);
+  
+  if (!root.success()) {
+    server.send(200, "application/json", result);
+    return false;
+  }
+
+  temperatureRemoteBuffer = root["main"]["temp"];
+  humidityRemoteBuffer = root["main"]["humidity"];
+  pressureRemoteBuffer = root["main"]["pressure"];
+  
+  readForecastCounter = tmp;
+  // Print.
+  String temp;
+  root.printTo(temp);
+  server.send(200, "application/json", temp);
+  return true;
 }
+
