@@ -22,14 +22,13 @@ void handleNotFound() {
 void handleData() {
   StaticJsonBuffer<200> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
-  float data[3];
   int code;
   
-  if (readData(data)) {
+  if (readData()) {
     // Build response.
-    root["humidity"] = data[0];
-    root["temperature"] = data[1];
-    root["heat_index"] = data[2];
+    root["humidity"] = humidityBuffer;
+    root["temperature"] = temperatureBuffer;
+    root["heat_index"] = heatIndexBuffer;
     code = 200;
   }
   else {
@@ -142,7 +141,6 @@ bool readForecast(bool cache = true) {
   const char* host = "api.openweathermap.org";
   if (!client.connect(host, httpPort)) {
     Serial.println("connection failed");
-    server.send(200, "application/json", "connection failed");
     return false;
   }
   
@@ -171,7 +169,6 @@ bool readForecast(bool cache = true) {
   
   if (!parseClientResponse(client, result)) {
     Serial.println(result);
-    server.send(200, "application/json", result);
     return false;
   }
 
@@ -191,10 +188,6 @@ bool readForecast(bool cache = true) {
   pressureRemoteBuffer = root["main"]["pressure"];
   
   readForecastCounter = tmp;
-  // Print.
-  String temp;
-  root.printTo(temp);
-  server.send(200, "application/json", temp);
   return true;
 }
 
